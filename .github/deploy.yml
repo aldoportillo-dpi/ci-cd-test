@@ -1,10 +1,17 @@
-name: Mock Deployment Workflow
+name: Build and deploy Mock Service to Development
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, review_requested, review_request_removed]
   pull_request_review:
     types: [submitted]
+  push:
+    branches:
+      - '**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -38,6 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check PR approvals
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
         id: check-approvals
         run: |
           approvals=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
