@@ -23,6 +23,7 @@ jobs:
           echo "✅ All tests passed successfully!"
 
   check-approvals:
+    needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
     outputs:
@@ -45,7 +46,7 @@ jobs:
           fi
 
   build:
-    needs: [test, check-approvals]
+    needs: check-approvals
     runs-on: ubuntu-latest
     steps:
       - name: Mock build process
@@ -59,7 +60,7 @@ jobs:
           echo "✅ Build completed successfully!"
 
   deploy:
-    needs: [test, check-approvals, build]
+    needs: build
     if: success()
     runs-on: ubuntu-latest
     steps:
