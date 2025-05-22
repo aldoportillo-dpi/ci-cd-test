@@ -1,32 +1,62 @@
-name: Deployment Workflow
+name: Mock Deployment Workflow
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, review_requested, review_request_removed]
+  pull_request_review:
+    types: [submitted]
 
 jobs:
-  deployment-check:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Check deployment label
-        id: check-label
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run mock tests
         run: |
-          if [[ ${{ contains(github.event.pull_request.labels.*.name, 'ready-for-deployment') }} == 'true' ]]; then
-            echo "deploy=true" >> $GITHUB_OUTPUT
-          else
-            echo "deploy=false" >> $GITHUB_OUTPUT
-          fi
+          echo "🧪 Running unit tests..."
+          sleep 2
+          echo "✅ All tests passed successfully!"
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mock build process
+        run: |
+          echo "📦 Starting build process..."
+          sleep 2
+          echo "🔨 Compiling code..."
+          sleep 1
+          echo "📚 Generating artifacts..."
+          sleep 1
+          echo "✅ Build completed successfully!"
 
   deploy:
-    needs: deployment-check
-    if: needs.deployment-check.outputs.deploy == 'true'
+    needs: [test, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          
-      - name: Deploy
+      - name: Check PR approvals
+        id: check-approvals
         run: |
-          echo "Deploying changes..."
-          # Add your deployment steps here
+          approvals=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" | \
+            jq '[.[] | select(.state == "APPROVED")] | length')
+          echo "Number of approvals: $approvals"
+          if [ "$approvals" -ge 2 ]; then
+            echo "✅ PR has required number of approvals (2)"
+          else
+            echo "❌ PR needs at least 2 approvals (current: $approvals)"
+            exit 1
+          fi
+
+      - name: Mock Deployment
+        if: success()
+        run: |
+          echo "🚀 Starting mock deployment process..."
+          echo "📦 Pretending to package application"
+          sleep 2
+          echo "🔄 Simulating deployment to staging"
+          sleep 2
+          echo "✅ Mock deployment completed successfully!"
