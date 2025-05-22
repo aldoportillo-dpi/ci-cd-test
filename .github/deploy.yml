@@ -1,0 +1,32 @@
+name: Deployment Workflow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  deployment-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deployment label
+        id: check-label
+        run: |
+          if [[ ${{ contains(github.event.pull_request.labels.*.name, 'ready-for-deployment') }} == 'true' ]]; then
+            echo "deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    needs: deployment-check
+    if: needs.deployment-check.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          
+      - name: Deploy
+        run: |
+          echo "Deploying changes..."
+          # Add your deployment steps here
