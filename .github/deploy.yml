@@ -1,32 +1,42 @@
-name: Deployment Workflow
+name: Mock Deployment Workflow
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, review_requested, review_request_removed]
+  pull_request_review:
+    types: [submitted]
 
 jobs:
-  deployment-check:
+  check-approvals:
     runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.approval-check.outputs.approved }}
     steps:
-      - name: Check deployment label
-        id: check-label
+      - name: Check PR approvals
+        id: approval-check
         run: |
-          if [[ ${{ contains(github.event.pull_request.labels.*.name, 'ready-for-deployment') }} == 'true' ]]; then
-            echo "deploy=true" >> $GITHUB_OUTPUT
+          approvals=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" | \
+            jq '[.[] | select(.state == "APPROVED")] | length')
+          echo "Number of approvals: $approvals"
+          if [ "$approvals" -ge 2 ]; then
+            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "✅ PR has required number of approvals (2)"
           else
-            echo "deploy=false" >> $GITHUB_OUTPUT
+            echo "approved=false" >> $GITHUB_OUTPUT
+            echo "❌ PR needs at least 2 approvals (current: $approvals)"
           fi
 
-  deploy:
-    needs: deployment-check
-    if: needs.deployment-check.outputs.deploy == 'true'
+  mock-deploy:
+    needs: check-approvals
+    if: needs.check-approvals.outputs.approved == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          
-      - name: Deploy
+      - name: Mock Deployment
         run: |
-          echo "Deploying changes..."
-          # Add your deployment steps here
+          echo "🚀 Starting mock deployment process..."
+          echo "📦 Pretending to package application"
+          sleep 2
+          echo "🔄 Simulating deployment to staging"
+          sleep 2
+          echo "✅ Mock deployment completed successfully!"
