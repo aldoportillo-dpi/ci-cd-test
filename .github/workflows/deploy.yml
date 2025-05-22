@@ -2,16 +2,12 @@ name: Build and deploy Mock Service to Development
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, review_requested, review_request_removed]
+    types: [opened, synchronize]
   pull_request_review:
     types: [submitted]
   push:
     branches:
       - '**'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   test:
@@ -26,8 +22,30 @@ jobs:
           sleep 2
           echo "✅ All tests passed successfully!"
 
+  check-approvals:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+    outputs:
+      approved: ${{ steps.check-approvals.outputs.approved }}
+    steps:
+      - name: Check PR approvals
+        id: check-approvals
+        run: |
+          approvals=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" | \
+            jq '[.[] | select(.state == "APPROVED")] | length')
+          echo "Number of approvals: $approvals"
+          if [ "$approvals" -ge 2 ]; then
+            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "✅ PR has required number of approvals (2)"
+          else
+            echo "approved=false" >> $GITHUB_OUTPUT
+            echo "❌ PR needs at least 2 approvals (current: $approvals)"
+            exit 1
+          fi
+
   build:
-    needs: test
+    needs: [test, check-approvals]
     runs-on: ubuntu-latest
     steps:
       - name: Mock build process
@@ -41,26 +59,11 @@ jobs:
           echo "✅ Build completed successfully!"
 
   deploy:
-    needs: [test, build]
+    needs: [test, check-approvals, build]
+    if: success()
     runs-on: ubuntu-latest
     steps:
-      - name: Check PR approvals
-        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
-        id: check-approvals
-        run: |
-          approvals=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" | \
-            jq '[.[] | select(.state == "APPROVED")] | length')
-          echo "Number of approvals: $approvals"
-          if [ "$approvals" -ge 2 ]; then
-            echo "✅ PR has required number of approvals (2)"
-          else
-            echo "❌ PR needs at least 2 approvals (current: $approvals)"
-            exit 1
-          fi
-
       - name: Mock Deployment
-        if: success()
         run: |
           echo "🚀 Starting mock deployment process..."
           echo "📦 Pretending to package application"
